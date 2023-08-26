@@ -131,8 +131,13 @@ mod tests {
     #[test]
     fn it_works() {
         let mut osc = Quartet::new();
-        audio::play(osc.clone(), Duration::from_secs(1));
+        // audio::play(osc.clone(), Duration::from_secs(1));
+        // osc.save("playme.wav", Duration::from_secs(1));
 
-        osc.save("playme.wav", Duration::from_secs(1));
+        let mut voice = Voice::new();
+        voice.set_tilt(-6.0);
+        voice.set_frequency(440.0);
+
+        voice.save("test3.wav", Duration::from_secs(1));
     }
 }
