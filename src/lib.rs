@@ -15,7 +15,7 @@ pub mod filter;
 use std::time::Duration;
 
 /// Number of harmonics that a voice will produce
-const NUM_HARMONICS: usize = 8;
+const NUM_HARMONICS: usize = 40;
 
 /// The number of samples per second
 pub const SAMPLE_RATE: u32 = 48000;
@@ -132,24 +132,28 @@ use crate::oscillator::{sine_oscillator, Oscillator};
 
 #[derive(Clone)]
 pub struct Voice {
-    harmonics: [Oscillator; NUM_HARMONICS],
+    pub harmonics: [Oscillator; NUM_HARMONICS],
 
-    amplitude_table: [f32; NUM_HARMONICS],
+    /// `true` if this harmonic is in use and `false` otherwise. Useful
+    /// for generating samples without particular harmonics
+    pub harmonics_in_use: [bool; NUM_HARMONICS],
+
+    pub amplitude_table: [f32; NUM_HARMONICS],
 
     /// Formants to be applied for this voice
-    formants: [Option<DirectForm2Transposed<f32>>; 16],
+    pub formants: [Option<DirectForm2Transposed<f32>>; 16],
 
     /// The formant frequency and bandwidth
-    formant_freq_bw: [Option<(f32, f32)>; 16],
+    pub formant_freq_bw: [Option<(f32, f32)>; 16],
 
     /// The fundamental frequency of this voice
-    fundamental: f32,
+    pub fundamental: f32,
 
     /// Number of available formants
-    num_formants: usize,
+    pub num_formants: usize,
 
     /// The spectral tilt of the voice
-    tilt: f32,
+    pub tilt: f32,
 }
 
 impl std::fmt::Debug for Voice {
@@ -176,9 +180,11 @@ impl Voice {
     pub fn new() -> Self {
         let harmonics = [sine_oscillator(SAMPLE_RATE); NUM_HARMONICS];
         let amplitude_table = [0f32; NUM_HARMONICS];
+        let harmonics_in_use = [true; NUM_HARMONICS];
 
         let mut res = Self {
             harmonics,
+            harmonics_in_use,
             amplitude_table,
             formants: [None; 16],
             formant_freq_bw: [None; 16],
@@ -189,6 +195,28 @@ impl Voice {
 
         res.set_tilt(-3.0);
         res
+    }
+
+    /// Disable the given harmonic
+    pub fn disable_harmonic(&mut self, index: usize) {
+        assert!(index > 0, "No zeroth harmonic");
+
+        if (index - 1) >= NUM_HARMONICS {
+            return;
+        }
+
+        self.harmonics_in_use[index - 1] = false;
+    }
+
+    /// Enable the given harmonic
+    pub fn enable_harmonic(&mut self, index: usize) {
+        assert!(index > 0, "No zeroth harmonic");
+
+        if (index - 1) >= NUM_HARMONICS {
+            return;
+        }
+
+        self.harmonics_in_use[index - 1] = true;
     }
 
     pub fn mutate(&mut self) {
@@ -319,6 +347,7 @@ impl Sampler for Voice {
             .harmonics
             .iter_mut()
             .enumerate()
+            .filter(|(index, harmonic)| self.harmonics_in_use[*index])
             .map(|(index, harmonic)| harmonic.sample() * self.amplitude_table[index])
             .sum();
 
@@ -352,11 +381,11 @@ impl Sampler for WhiteNoise {
 }
 
 #[derive(Clone)]
-struct Quartet {
-    bass: Voice,
-    bari: Voice,
-    lead: Voice,
-    tenor: Voice,
+pub struct Quartet {
+    pub bass: Voice,
+    pub bari: Voice,
+    pub lead: Voice,
+    pub tenor: Voice,
 }
 
 impl Quartet {
@@ -466,4 +495,68 @@ mod tests {
 
         // voice.save("test.wav", Duration::from_secs(1));
     }
+}
+
+const A4_FREQ: f32 = 440.0;
+
+/// Convert a 'note+cents' note format into its frequency
+///
+/// For example:
+/// A4    -> 440.0
+/// C3-20 -> 129.31
+pub fn note_to_frequency(note: &str) -> Option<f32> {
+    let twelfth_root_of_two = 2.0f32.powf(1.0 / 12.0);
+
+    let mut offset = 0;
+
+    // Parse the note format into the note name, accidental (if any) octave and cents (if any)
+    let (note_name, accidental, octave, cents) = {
+        let note = note.as_bytes();
+
+        let note_name = note[offset];
+        offset += 1;
+
+        let mut accidental = None;
+        if matches!(note[offset], b'b' | b'#') {
+            accidental = Some(note[offset]);
+            offset += 1;
+        }
+
+        let mut octave = note[offset] as u8 - b'0' as u8;
+        offset += 1;
+
+        let cents: String = note[offset..].iter().map(|x| *x as char).collect();
+
+        (
+            note_name,
+            accidental,
+            octave,
+            cents.parse::<i32>().ok().unwrap_or(0),
+        )
+    };
+
+    let note_position = match note_name {
+        b'C' => 0,
+        b'D' => 2,
+        b'E' => 4,
+        b'F' => 5,
+        b'G' => 7,
+        b'A' => 9,
+        b'B' => 11,
+        _ => return None,
+    };
+
+    let note_position = match accidental {
+        Some(b'b') => note_position - 1,
+        Some(b'#') => note_position + 1,
+        Some(_) => unreachable!(),
+        _ => note_position,
+    };
+
+    let distance_from_a4 = (octave as f32 - 4.0) * 12.0 + note_position as f32 - 9.0;
+
+    let frequency = A4_FREQ * twelfth_root_of_two.powf(distance_from_a4 as f32);
+    let adjusted_frequency = frequency * twelfth_root_of_two.powf(cents as f32 / 100.0);
+
+    Some(adjusted_frequency)
 }

@@ -46,8 +46,6 @@ impl Oscillator {
             *elem = func(index, wave_table_len);
         }
 
-        println!("{wave_table:?}");
-
         Self {
             sample_rate,
             wave_table,
