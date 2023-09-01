@@ -7,5 +7,10 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.75"
+biquad = "0.4.2"
 cpal = "0.15.2"
 hound = "3.5.0"
+plotters = "0.3.5"
+rand = "0.8.5"
+rustfft = "6.1.0"
+timeloop = { git = "https://github.com/ctfhacker/timeloop", version = "0.1.0" }

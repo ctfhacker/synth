@@ -1,6 +1,6 @@
 //! A wavetable oscillator
 
-use std::f64::consts::PI;
+use std::f32::consts::PI;
 
 /// Number of samples in the wave table
 const WAVE_TABLE_SIZE: usize = 64;
@@ -11,23 +11,23 @@ pub struct Oscillator {
     sample_rate: u32,
 
     /// The default wave table for this oscillator
-    wave_table: [f64; WAVE_TABLE_SIZE],
+    wave_table: [f32; WAVE_TABLE_SIZE],
 
     /// The next index to generate
-    index: f64,
+    index: f32,
 
     ///
-    index_increment: f64,
+    index_increment: f32,
 }
 
 impl crate::Sampler for Oscillator {
-    fn sample(&mut self) -> f64 {
+    fn sample(&mut self) -> f32 {
         self.get_sample()
     }
 }
 
-fn sine(index: usize, wave_table_size: usize) -> f64 {
-    (2.0 * PI * index as f64 / wave_table_size as f64).sin()
+fn sine(index: usize, wave_table_size: usize) -> f32 {
+    (2.0 * PI * index as f32 / wave_table_size as f32).sin()
 }
 
 /// Get a sine oscillator with the given `sample_rate`
@@ -36,7 +36,7 @@ pub fn sine_oscillator(sample_rate: u32) -> Oscillator {
 }
 
 impl Oscillator {
-    pub fn new(sample_rate: u32, func: fn(index: usize, wave_table_size: usize) -> f64) -> Self {
+    pub fn new(sample_rate: u32, func: fn(index: usize, wave_table_size: usize) -> f32) -> Self {
         let mut wave_table = [0.0; WAVE_TABLE_SIZE];
 
         let wave_table_len = wave_table.len();
@@ -56,36 +56,40 @@ impl Oscillator {
         }
     }
 
-    pub fn set_index(&mut self, index: f64) {
+    pub fn reset(&mut self) {
+        self.index = 0.0;
+    }
+
+    pub fn set_index(&mut self, index: f32) {
         self.index = index;
     }
 
-    pub fn set_frequency(&mut self, frequency: f64) {
-        self.index_increment = frequency * WAVE_TABLE_SIZE as f64 / self.sample_rate as f64;
+    pub fn set_frequency(&mut self, frequency: f32) {
+        self.index_increment = frequency * WAVE_TABLE_SIZE as f32 / self.sample_rate as f32;
     }
 
     /// Get the next value from the oscillator
-    pub fn get_sample(&mut self) -> f64 {
+    pub fn get_sample(&mut self) -> f32 {
         // Get the next sample
         let sample = self.linear_interp();
 
         // Go to the next index
         self.index += self.index_increment;
-        self.index %= WAVE_TABLE_SIZE as f64;
+        self.index %= WAVE_TABLE_SIZE as f32;
 
         // Return the sample
         return sample;
     }
 
     /// Return the linearly interpolated value of the current index into the wave table
-    pub fn linear_interp(&self) -> f64 {
+    pub fn linear_interp(&self) -> f32 {
         // Find the indexes surrounding the current index
         // Index: 2.6 -> [2, 3]
         let truncated_index = (self.index as u32) as usize;
         let next_index = (truncated_index + 1) % WAVE_TABLE_SIZE;
 
         // Weight of the next index from the current one
-        let next_index_weight = self.index - truncated_index as f64;
+        let next_index_weight = self.index - truncated_index as f32;
 
         // Distance from the previous index to this one
         let truncated_index_weight = 1.0 - next_index_weight;
